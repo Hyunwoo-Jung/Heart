@@ -20,7 +20,7 @@ EOF
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 GPU_ID="2"
-REPEATS=1
+REPEATS=10
 CHECKPOINT_DIR="${SCRIPT_DIR}/checkpoints"
 TRAIN_ARGS=()
 
@@ -75,5 +75,5 @@ for ((i = 0; i < REPEATS; i++)); do
       --seed "${SEEDS[$i]}"
   )
 done
-
++
 echo "Completed ${REPEATS} run(s)."
