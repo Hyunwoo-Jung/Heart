@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 import heart
+from baselines.evaluate import score_metrics
 
 from .model import (
     RETURN_SCALE,
@@ -29,22 +30,6 @@ from .policy import CHECKPOINT_FORMAT, load_network
 def mc_returns(rewards):
     """Undiscounted returns through match termination, including this reward."""
     return np.cumsum(np.asarray(rewards, dtype=np.float32)[::-1])[::-1].copy()
-
-
-def score_metrics(scores, players, deals):
-    scores = np.asarray(scores)
-    players = np.asarray(players)
-    own = scores[np.arange(len(scores)), players]
-    lower = (scores < own[:, None]).sum(axis=1)
-    tied = (scores == own[:, None]).sum(axis=1)
-    return {
-        "matches": len(scores),
-        "mean_penalty": float(own.mean()),
-        "penalty_per_deal": float(own.sum() / np.asarray(deals).sum()),
-        "mean_rank": float((1 + lower + (tied - 1) / 2).mean()),
-        "joint_win_rate": float((lower == 0).mean()),
-        "mean_deals": float(np.mean(deals)),
-    }
 
 
 @cache
@@ -214,7 +199,7 @@ def main(argv=None):
     start, best = 0, float("inf")
     if args.resume:
         network, checkpoint = load_network(args.resume, device)
-        for name in (
+        retained = (
             "seed",
             "eval_seed",
             "num_envs",
@@ -222,13 +207,28 @@ def main(argv=None):
             "lr",
             "epsilon",
             "batch_size",
-        ):
+        )
+        for name in retained:
             if checkpoint["config"][name] != getattr(args, name):
                 raise ValueError(f"resume must retain --{name.replace('_', '-')}")
         rng.bit_generator.state = json.loads(checkpoint["rng"])
         torch.set_rng_state(checkpoint["torch_rng"])
         start = checkpoint["iteration"]
         best = checkpoint["best_mean_penalty"]
+        best_path = args.output / "best.pt"
+        if best_path.exists():
+            saved_best = torch.load(best_path, map_location="cpu", weights_only=True)
+            if (
+                saved_best["format"] != CHECKPOINT_FORMAT
+                or saved_best["network"] != checkpoint["network"]
+                or any(
+                    saved_best["config"][name] != getattr(args, name)
+                    for name in retained
+                )
+            ):
+                raise ValueError("best.pt does not belong to the resumed experiment")
+            # A crash can save best.pt before last.pt receives its new best score.
+            best = min(best, saved_best["best_mean_penalty"])
     else:
         if args.output.exists() and any(args.output.iterdir()):
             raise FileExistsError(f"output is not empty: {args.output}; use --resume")

@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     import torch
@@ -21,6 +22,7 @@ import jax
 import numpy as np
 
 import heart
+from baselines.mc import train
 from baselines.mc.model import (
     QNetwork,
     engine_action,
@@ -132,6 +134,43 @@ class MonteCarloTests(unittest.TestCase):
         for argv in (["--epsilon", "2"], ["--num-envs", "0"], ["--lr", "nan"]):
             with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
                 parse_args(argv)
+
+    def test_resume_preserves_best_saved_before_interrupted_last_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            args = parse_args(
+                [
+                    "--device",
+                    "cpu",
+                    "--iterations",
+                    "2",
+                    "--num-envs",
+                    "1",
+                    "--hidden",
+                    "8",
+                    "--resume",
+                    str(root / "last.pt"),
+                ]
+            )
+            network = QNetwork(len(self.x), hidden=8)
+            optimizer = torch.optim.Adam(network.parameters(), lr=args.lr)
+            rng = np.random.default_rng(args.seed)
+            save_checkpoint(root / "last.pt", network, optimizer, rng, 1, 70.0, args)
+            save_checkpoint(root / "best.pt", network, optimizer, rng, 2, 60.0, args)
+            original = (root / "best.pt").read_bytes()
+            data = ([(self.x, 0, -0.5)], np.array([[50, 70, 90, 100]]), np.array([10]))
+            with (
+                patch.object(train, "parse_args", return_value=args),
+                patch.object(train, "collect", return_value=data),
+                patch.object(train, "update", return_value=0.0),
+                patch.object(train, "evaluate", return_value={"mean_penalty": 65.0}),
+                patch("builtins.print"),
+            ):
+                train.main()
+            self.assertEqual(original, (root / "best.pt").read_bytes())
+            self.assertEqual(
+                load_network(root / "last.pt")[1]["best_mean_penalty"], 60.0
+            )
 
 
 if __name__ == "__main__":

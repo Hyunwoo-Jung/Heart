@@ -39,7 +39,7 @@ bash baselines/mc/train.sh
 
 ```bash
 export CUDA_VISIBLE_DEVICES=2
-CONDA_ENV="openal"
+CONDA_ENV="heart"
 SEEDS=(1)
 ITERATIONS=1000
 NUM_ENVS=16
@@ -52,7 +52,7 @@ EVAL_EVERY=25
 RESUME=""
 ```
 
-스크립트가 `~/anaconda3/etc/profile.d/conda.sh`를 읽고 `openal`을 활성화한다.
+스크립트가 `~/anaconda3/etc/profile.d/conda.sh`를 읽고 `heart`를 활성화한다.
 다른 conda 설치 경로라면 `CONDA_SH`를 수정한다. 여러 seed를 실행하려면
 `SEEDS=(1 2 3)`으로 바꾼다. 각 seed는 새 모델과 출력 폴더로 **순차 실행**되며,
 한 작업이 실패하면 종료 코드를 보존하고 다음 작업을 시작하지 않는다.
@@ -123,17 +123,18 @@ policy = make_policy(".local_training/mc/<JOB_NAME>/best.pt", device="cuda")
 action = policy(state, player, key)
 ```
 
-동일 seed의 초기 배분을 네 학습자 좌석에서 반복하여 평가한다. `--games`는
-4의 배수여야 한다. 상대는 남은 좌석의 번호 순서로 배치된다.
+공통 평가기 `baselines/evaluate.py`가 동일 seed의 초기 배분을 모든 서로 다른
+좌석 배치에서 반복한다. `--games`는 상대가 모두 같으면 4, 다른 상대 하나와
+같은 상대 둘이면 12, 모두 다르면 24의 배수여야 한다. 기본값은 96이다.
 
 ```bash
 JAX_PLATFORMS=cpu python -m baselines.mc.evaluate \
   ".local_training/mc/<JOB_NAME>/best.pt" \
-  --opponents medium medium medium --games 100
+  --opponents medium medium medium --games 96
 
 JAX_PLATFORMS=cpu python -m baselines.mc.evaluate \
   ".local_training/mc/<JOB_NAME>/best.pt" \
-  --opponents hard hard hard --games 100
+  --opponents hard hard hard --games 96
 ```
 
 다른 방법론도 `heart.play.load_seat_policy`가 읽는 factory 규약을 구현하면 된다.
@@ -145,7 +146,7 @@ JAX_PLATFORMS=cpu python -m baselines.mc.evaluate \
   ".local_training/mc/<JOB_NAME>/best.pt" \
   --opponents \
   'my_method.policy:make_policy(path/to/model.pt)' medium medium \
-  --games 100
+  --games 96
 ```
 
 사람과 대국하는 기존 UI에도 연결할 수 있다.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import tempfile
@@ -13,7 +14,7 @@ LAUNCHER = Path(__file__).resolve().parents[1] / "baselines/mc/train.sh"
 
 
 class LauncherTests(unittest.TestCase):
-    def run_launcher(self, *, exit_code=0, resume=""):
+    def run_launcher(self, *, exit_code=0, resume="", launcher=LAUNCHER, settings=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = root / "baselines/mc/train.sh"
@@ -31,17 +32,26 @@ class LauncherTests(unittest.TestCase):
             python.chmod(0o755)
             conda = root / "conda.sh"
             conda.write_text(
-                'conda() { [[ "$*" == "activate openal" ]]; }\n'
+                'conda() { [[ "$*" == "activate test-env" ]]; }\n'
                 f'export PATH={shlex.quote(str(binary))}:"$PATH"\n'
             )
-            source = LAUNCHER.read_text().replace(
-                'CONDA_SH="${HOME}/anaconda3/etc/profile.d/conda.sh"',
-                f"CONDA_SH={shlex.quote(str(conda))}",
-            )
-            if resume:
-                source = source.replace('RESUME=""', f'RESUME="{resume}"')
-            else:
-                source = source.replace("SEEDS=(1)", "SEEDS=(1 2)")
+            source = launcher.read_text()
+            fixture = {
+                "CONDA_SH": shlex.quote(str(conda)),
+                "CONDA_ENV": '"test-env"',
+                "CUDA_VISIBLE_DEVICES": "2",
+                "SEEDS": "(1)" if resume else "(1 2)",
+                "ITERATIONS": "1000",
+                "NUM_ENVS": "16",
+                "RESUME": shlex.quote(resume),
+            } | (settings or {})
+            for name, value in fixture.items():
+                source = re.sub(
+                    rf"^((?:export )?{name}=).*$",
+                    lambda match, value=value: match[1] + value,
+                    source,
+                    flags=re.MULTILINE,
+                )
             script.write_text(source)
             result = subprocess.run(
                 ["bash", str(script)],
@@ -89,6 +99,18 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(len(outputs), 1)
         self.assertIn(f"--resume\n{checkpoint}\n", outputs[0])
         self.assertIn("--output\n.local_training/mc/existing\n", outputs[0])
+
+    def test_ismcts_launcher_selects_gpu_and_passes_search_settings(self):
+        result, outputs, logs = self.run_launcher(
+            launcher=LAUNCHER.parents[1] / "ismcts/run.sh",
+            settings={"ITERATIONS": "1024", "SEEDS": "(2000000)"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(outputs), 1)
+        self.assertIn("gpu=2 jax=cuda,cpu", outputs[0])
+        self.assertIn("--iterations\n1024\n", outputs[0])
+        self.assertIn("--device\ngpu\n", outputs[0])
+        self.assertIn("Completed job:", logs[0])
 
 
 if __name__ == "__main__":

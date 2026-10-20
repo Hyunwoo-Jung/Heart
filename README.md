@@ -179,6 +179,11 @@ An independent Monte Carlo Q baseline lives in
 [`baselines/mc/`](baselines/mc/README.md), with a GPU launch script,
 checkpoint loading, and matches against other `SeatPolicy` implementations.
 
+An independent [ISMCTS baseline](baselines/ismcts/README.md) searches both
+passing and play to the end of the current deal, with 1,024 simulations per
+decision and GPU-batched rollouts. Run `bash baselines/ismcts/run.sh`.
+Both baselines use a shared evaluator that balances all distinct seat layouts.
+
 Use the single-learner adapter when one learned policy should face rule-based
 opponents:
 
