@@ -11,3 +11,4 @@ heart-game*.html
 heart-replay*.html
 wandb/
 .local_training/
+logs/

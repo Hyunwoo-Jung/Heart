@@ -38,6 +38,7 @@ Issues = "https://github.com/funny-rl/Heart/issues"
 Documentation = "https://github.com/funny-rl/Heart/tree/main/docs"
 
 [project.optional-dependencies]
+mc = ["torch>=2.6"]
 test = ["pytest>=8", "tomli>=2; python_version < '3.11'"]
 render = ["pillow>=10"]
 contest = ["flatbuffers>=23"]

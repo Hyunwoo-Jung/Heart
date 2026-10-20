@@ -175,6 +175,10 @@ Entries arrive as a pull request adding one directory under
 
 ## Train one player
 
+An independent Monte Carlo Q baseline lives in
+[`baselines/mc/`](baselines/mc/README.md), with a GPU launch script,
+checkpoint loading, and matches against other `SeatPolicy` implementations.
+
 Use the single-learner adapter when one learned policy should face rule-based
 opponents:
 
